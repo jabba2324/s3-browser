@@ -58,9 +58,10 @@ class FileOptionsSheet extends StatelessWidget {
     final isVideo = FileTypeUtils.isVideo(object.name);
 
     return SafeArea(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
           if (isImage && onViewPhoto != null)
             ListTile(
               leading: const Icon(Icons.photo),
@@ -127,6 +128,7 @@ class FileOptionsSheet extends StatelessWidget {
             ),
           ],
         ],
+        ),
       ),
     );
   }
