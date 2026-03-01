@@ -31,11 +31,16 @@ class AuthS3Service {
       // Determine if SSL should be used
       final useSSL = endpoint?.startsWith('http://') != true;
 
+      // Extract region from AWS endpoint (e.g. s3.eu-west-2.amazonaws.com)
+      final regionMatch = RegExp(r's3\.([^.]+)\.amazonaws\.com').firstMatch(endpointUrl);
+      final region = regionMatch?.group(1);
+
       _client = Minio(
         endPoint: endpointUrl,
         accessKey: accessKey,
         secretKey: secretKey,
         useSSL: useSSL,
+        region: region,
       );
 
       // Test connection by checking if the bucket exists
