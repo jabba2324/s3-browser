@@ -121,31 +121,45 @@ class FileOperationsService {
     }
   }
 
-  /// Picks and uploads a file to S3
+  /// Picks and uploads one or more files to S3
   /// Returns null if user cancelled the picker
   Future<FileOperationResult?> uploadFile(String currentPrefix) async {
     try {
-      final result = await FilePicker.platform.pickFiles(withData: true);
+      final result = await FilePicker.platform.pickFiles(
+        withData: true,
+        allowMultiple: true,
+      );
 
       if (result == null || result.files.isEmpty) {
         return null; // User cancelled
       }
 
-      final file = result.files.first;
-      if (file.bytes == null) {
-        return FileOperationResult.failure(
-          'Could not read file data',
-          fileName: file.name,
-        );
+      int succeeded = 0;
+      final failures = <String>[];
+
+      for (final file in result.files) {
+        if (file.bytes == null) {
+          failures.add(file.name);
+          continue;
+        }
+        try {
+          await browserService.uploadObject(currentPrefix + file.name, file.bytes!);
+          succeeded++;
+        } catch (_) {
+          failures.add(file.name);
+        }
       }
 
-      final objectKey = currentPrefix + file.name;
-      await browserService.uploadObject(objectKey, file.bytes!);
-
-      return FileOperationResult.success(
-        'Uploaded "${file.name}"',
-        fileName: file.name,
-      );
+      if (failures.isEmpty) {
+        final label = succeeded == 1 ? '"${result.files.first.name}"' : '$succeeded files';
+        return FileOperationResult.success('Uploaded $label');
+      } else if (succeeded == 0) {
+        return FileOperationResult.failure('Failed to upload ${failures.length} file(s)');
+      } else {
+        return FileOperationResult.success(
+          'Uploaded $succeeded file(s), ${failures.length} failed',
+        );
+      }
     } catch (e) {
       return FileOperationResult.failure('Error uploading: ${e.toString()}');
     }

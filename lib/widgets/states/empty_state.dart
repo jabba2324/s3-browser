@@ -7,6 +7,8 @@ class EmptyState extends StatelessWidget {
   final String? subtitle;
   final double iconSize;
   final Color? iconColor;
+  final String? actionLabel;
+  final VoidCallback? onAction;
 
   const EmptyState({
     super.key,
@@ -15,6 +17,8 @@ class EmptyState extends StatelessWidget {
     this.subtitle,
     this.iconSize = 64,
     this.iconColor,
+    this.actionLabel,
+    this.onAction,
   });
 
   @override
@@ -36,6 +40,14 @@ class EmptyState extends StatelessWidget {
           if (subtitle != null) ...[
             const SizedBox(height: 8),
             Text(subtitle!),
+          ],
+          if (onAction != null) ...[
+            const SizedBox(height: 24),
+            ElevatedButton.icon(
+              onPressed: onAction,
+              icon: const Icon(Icons.upload_file),
+              label: Text(actionLabel ?? 'Upload'),
+            ),
           ],
         ],
       ),

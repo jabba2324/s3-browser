@@ -43,9 +43,16 @@ class S3BrowserController extends ChangeNotifier {
   String _currentPrefix = '';
   String? _error;
   SortOption _sortOption = SortOption.nameAsc;
+  String _filterQuery = '';
 
   // Getters
   List<S3Object> get objects => _objects;
+  String get filterQuery => _filterQuery;
+  List<S3Object> get filteredObjects {
+    if (_filterQuery.isEmpty) return _objects;
+    final q = _filterQuery.toLowerCase();
+    return _objects.where((o) => o.name.toLowerCase().contains(q)).toList();
+  }
   SortOption get sortOption => _sortOption;
   bool get isLoading => _isLoading;
   bool get isGridView => _isGridView;
@@ -87,6 +94,7 @@ class S3BrowserController extends ChangeNotifier {
 
   void navigateToFolder(String folderKey) {
     _currentPrefix = folderKey;
+    _filterQuery = '';
     notifyListeners();
     loadObjects();
   }
@@ -101,12 +109,18 @@ class S3BrowserController extends ChangeNotifier {
     }
 
     _currentPrefix = parts.isEmpty ? '' : '${parts.join('/')}/';
+    _filterQuery = '';
     notifyListeners();
     loadObjects();
   }
 
   void toggleGridView() {
     _isGridView = !_isGridView;
+    notifyListeners();
+  }
+
+  void setFilter(String query) {
+    _filterQuery = query;
     notifyListeners();
   }
 

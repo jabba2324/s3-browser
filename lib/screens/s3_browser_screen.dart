@@ -28,6 +28,8 @@ class S3BrowserScreen extends StatefulWidget {
 class _S3BrowserScreenState extends State<S3BrowserScreen> {
   final _authStorage = AuthStorageService();
   late final S3BrowserController _controller;
+  bool _isSearching = false;
+  final _searchController = TextEditingController();
 
   @override
   void initState() {
@@ -47,7 +49,29 @@ class _S3BrowserScreenState extends State<S3BrowserScreen> {
   @override
   void dispose() {
     _controller.dispose();
+    _searchController.dispose();
     super.dispose();
+  }
+
+  void _startSearch() {
+    setState(() => _isSearching = true);
+  }
+
+  void _stopSearch() {
+    setState(() => _isSearching = false);
+    _searchController.clear();
+    _controller.setFilter('');
+  }
+
+  String _buildItemSummary() {
+    final filtered = _controller.filteredObjects;
+    final total = _controller.objects.length;
+    final count = filtered.length;
+    final totalBytes = filtered.fold<int>(0, (sum, o) => sum + (o.size ?? 0));
+    final countStr = count != total
+        ? '$count of $total items'
+        : '$count ${count == 1 ? 'item' : 'items'}';
+    return totalBytes > 0 ? '$countStr · ${FormatUtils.fileSize(totalBytes)}' : countStr;
   }
 
   void _showResultSnackBar(FileOperationResult result) {
@@ -74,15 +98,45 @@ class _S3BrowserScreenState extends State<S3BrowserScreen> {
 
   PreferredSizeWidget _buildAppBar() {
     return AppBar(
-      title: Text(_controller.currentFolderName),
-      backgroundColor: Colors.white,
-      leading: _controller.canNavigateUp
-          ? IconButton(
-              icon: const Icon(Icons.arrow_back),
-              onPressed: _controller.navigateUp,
+      title: _isSearching
+          ? TextField(
+              controller: _searchController,
+              autofocus: true,
+              decoration: const InputDecoration(
+                hintText: 'Filter by name…',
+                border: InputBorder.none,
+              ),
+              onChanged: _controller.setFilter,
             )
-          : null,
-      actions: [
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(_controller.currentFolderName),
+                if (!_controller.isLoading && _controller.objects.isNotEmpty)
+                  Text(
+                    _buildItemSummary(),
+                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.normal),
+                  ),
+              ],
+            ),
+      backgroundColor: Colors.white,
+      leading: _isSearching
+          ? IconButton(
+              icon: const Icon(Icons.close),
+              onPressed: _stopSearch,
+            )
+          : _controller.canNavigateUp
+              ? IconButton(
+                  icon: const Icon(Icons.arrow_back),
+                  onPressed: _controller.navigateUp,
+                )
+              : null,
+      actions: _isSearching ? [] : [
+        IconButton(
+          icon: const Icon(Icons.search),
+          onPressed: _startSearch,
+          tooltip: 'Filter',
+        ),
         PopupMenuButton<SortOption>(
           icon: const Icon(Icons.sort),
           tooltip: 'Sort',
@@ -110,11 +164,6 @@ class _S3BrowserScreenState extends State<S3BrowserScreen> {
           onPressed: _controller.toggleGridView,
           tooltip: _controller.isGridView ? 'List view' : 'Grid view',
         ),
-        IconButton(
-          icon: const Icon(Icons.refresh),
-          onPressed: _controller.loadObjects,
-          tooltip: 'Refresh',
-        ),
         PopupMenuButton<String>(
           onSelected: _handleMenuAction,
           itemBuilder: (context) => [
@@ -135,6 +184,16 @@ class _S3BrowserScreenState extends State<S3BrowserScreen> {
                   Icon(Icons.create_new_folder),
                   SizedBox(width: 8),
                   Text('Create Folder'),
+                ],
+              ),
+            ),
+            const PopupMenuItem(
+              value: 'refresh',
+              child: Row(
+                children: [
+                  Icon(Icons.refresh),
+                  SizedBox(width: 8),
+                  Text('Refresh'),
                 ],
               ),
             ),
@@ -162,6 +221,8 @@ class _S3BrowserScreenState extends State<S3BrowserScreen> {
       }
     } else if (value == 'create_folder') {
       _showCreateFolderDialog();
+    } else if (value == 'refresh') {
+      _controller.loadObjects();
     } else if (value == 'logout') {
       await _authStorage.clearCredentials();
       widget.s3Service.disconnect();
@@ -184,11 +245,19 @@ class _S3BrowserScreenState extends State<S3BrowserScreen> {
       );
     }
 
-    if (_controller.objects.isEmpty) {
-      return const EmptyState(
-        icon: Icons.folder_open,
-        title: 'Empty folder',
-        subtitle: 'No files or folders found',
+    if (_controller.filteredObjects.isEmpty) {
+      final isFiltering = _controller.filterQuery.isNotEmpty;
+      return EmptyState(
+        icon: isFiltering ? Icons.search_off : Icons.folder_open,
+        title: isFiltering ? 'No matches' : 'Empty folder',
+        subtitle: isFiltering
+            ? 'No items match "${_controller.filterQuery}"'
+            : 'No files or folders found',
+        actionLabel: isFiltering ? null : 'Upload Files',
+        onAction: isFiltering ? null : () async {
+          final result = await _controller.uploadFile();
+          if (result != null) _showResultSnackBar(result);
+        },
       );
     }
 
@@ -213,7 +282,9 @@ class _S3BrowserScreenState extends State<S3BrowserScreen> {
           crossAxisCount = 6;
         }
 
-        return GridView.builder(
+        return RefreshIndicator(
+          onRefresh: _controller.loadObjects,
+          child: GridView.builder(
           padding: const EdgeInsets.all(8.0),
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: crossAxisCount,
@@ -221,9 +292,9 @@ class _S3BrowserScreenState extends State<S3BrowserScreen> {
             mainAxisSpacing: 8,
             childAspectRatio: 0.85,
           ),
-          itemCount: _controller.objects.length,
+          itemCount: _controller.filteredObjects.length,
           itemBuilder: (context, index) {
-            final object = _controller.objects[index];
+            final object = _controller.filteredObjects[index];
             return ObjectGridTile(
               object: object,
               onTap: () => _handleObjectTap(object),
@@ -231,23 +302,27 @@ class _S3BrowserScreenState extends State<S3BrowserScreen> {
               onOptionsPressed: () => _showFileOptions(object),
             );
           },
+        ),
         );
       },
     );
   }
 
   Widget _buildListView() {
-    return ListView.builder(
+    return RefreshIndicator(
+      onRefresh: _controller.loadObjects,
+      child: ListView.builder(
       padding: const EdgeInsets.all(8.0),
-      itemCount: _controller.objects.length,
+      itemCount: _controller.filteredObjects.length,
       itemBuilder: (context, index) {
-        final object = _controller.objects[index];
+        final object = _controller.filteredObjects[index];
         return ObjectListTile(
           object: object,
           onTap: () => _handleObjectTap(object),
           onOptionsPressed: () => _showFileOptions(object),
         );
       },
+    ),
     );
   }
 
