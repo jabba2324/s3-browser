@@ -44,6 +44,8 @@ class S3BrowserController extends ChangeNotifier {
   String? _error;
   SortOption _sortOption = SortOption.nameAsc;
   String _filterQuery = '';
+  Set<String> _selectedKeys = {};
+  bool _isSelectionMode = false;
 
   // Getters
   List<S3Object> get objects => _objects;
@@ -59,6 +61,12 @@ class S3BrowserController extends ChangeNotifier {
   String get currentPrefix => _currentPrefix;
   String? get error => _error;
   bool get canNavigateUp => _currentPrefix.isNotEmpty;
+  bool get isSelecting => _isSelectionMode || _selectedKeys.isNotEmpty;
+  bool isSelected(String key) => _selectedKeys.contains(key);
+  List<S3Object> get selectedObjects =>
+      _objects.where((o) => _selectedKeys.contains(o.key)).toList();
+  List<S3Object> get selectedFiles =>
+      selectedObjects.where((o) => !o.isFolder).toList();
 
   String get currentFolderName {
     if (_currentPrefix.isEmpty) return bucketName;
@@ -92,9 +100,38 @@ class S3BrowserController extends ChangeNotifier {
     }
   }
 
+  void enterSelectionMode() {
+    _isSelectionMode = true;
+    notifyListeners();
+  }
+
+  void toggleSelection(String key) {
+    _isSelectionMode = true;
+    if (_selectedKeys.contains(key)) {
+      _selectedKeys.remove(key);
+    } else {
+      _selectedKeys.add(key);
+    }
+    notifyListeners();
+  }
+
+  void selectAll() {
+    _isSelectionMode = true;
+    _selectedKeys = filteredObjects.map((o) => o.key).toSet();
+    notifyListeners();
+  }
+
+  void clearSelection() {
+    _selectedKeys.clear();
+    _isSelectionMode = false;
+    notifyListeners();
+  }
+
   void navigateToFolder(String folderKey) {
     _currentPrefix = folderKey;
     _filterQuery = '';
+    _selectedKeys.clear();
+    _isSelectionMode = false;
     notifyListeners();
     loadObjects();
   }
@@ -110,6 +147,8 @@ class S3BrowserController extends ChangeNotifier {
 
     _currentPrefix = parts.isEmpty ? '' : '${parts.join('/')}/';
     _filterQuery = '';
+    _selectedKeys.clear();
+    _isSelectionMode = false;
     notifyListeners();
     loadObjects();
   }
@@ -162,6 +201,15 @@ class S3BrowserController extends ChangeNotifier {
 
   Future<FileOperationResult> shareFile(S3Object object, {Rect? sharePositionOrigin}) async {
     return fileOps.shareFile(object, sharePositionOrigin: sharePositionOrigin);
+  }
+
+  Future<FileOperationResult> shareSelectedFiles({Rect? sharePositionOrigin}) async {
+    final result = await fileOps.shareFiles(
+      selectedFiles,
+      sharePositionOrigin: sharePositionOrigin,
+    );
+    clearSelection();
+    return result;
   }
 
   Future<FileOperationResult> deleteFile(S3Object object) async {

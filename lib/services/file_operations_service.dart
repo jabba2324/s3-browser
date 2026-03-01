@@ -84,6 +84,49 @@ class FileOperationsService {
     }
   }
 
+  /// Shares multiple files via native share sheet
+  Future<FileOperationResult> shareFiles(
+    List<S3Object> objects, {
+    Rect? sharePositionOrigin,
+  }) async {
+    if (objects.isEmpty) {
+      return FileOperationResult.failure('No files selected to share');
+    }
+    try {
+      final tempFiles = <XFile>[];
+      final failures = <String>[];
+
+      for (final object in objects) {
+        try {
+          final url = await browserService.getDownloadUrl(object.key);
+          final response = await http.get(Uri.parse(url));
+          if (response.statusCode != 200) throw Exception('Download failed');
+          final tempPath = await saveToTempFile(object.name, response.bodyBytes);
+          tempFiles.add(XFile(tempPath));
+        } catch (_) {
+          failures.add(object.name);
+        }
+      }
+
+      if (tempFiles.isEmpty) {
+        return FileOperationResult.failure('Failed to prepare files for sharing');
+      }
+
+      await Share.shareXFiles(tempFiles, sharePositionOrigin: sharePositionOrigin);
+
+      if (failures.isEmpty) {
+        final label = tempFiles.length == 1 ? '"${objects.first.name}"' : '${tempFiles.length} files';
+        return FileOperationResult.success('Shared $label');
+      } else {
+        return FileOperationResult.success(
+          'Shared ${tempFiles.length} file${tempFiles.length == 1 ? '' : 's'}, ${failures.length} failed',
+        );
+      }
+    } catch (e) {
+      return FileOperationResult.failure('Error sharing: ${e.toString()}');
+    }
+  }
+
   /// Deletes an object from S3
   Future<FileOperationResult> deleteFile(S3Object object) async {
     try {

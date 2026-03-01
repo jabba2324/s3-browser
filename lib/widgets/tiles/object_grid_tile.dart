@@ -9,6 +9,8 @@ class ObjectGridTile extends StatelessWidget {
   final VoidCallback? onTap;
   final VoidCallback? onLongPress;
   final VoidCallback? onOptionsPressed;
+  final bool isSelecting;
+  final bool isSelected;
 
   const ObjectGridTile({
     super.key,
@@ -16,12 +18,22 @@ class ObjectGridTile extends StatelessWidget {
     this.onTap,
     this.onLongPress,
     this.onOptionsPressed,
+    this.isSelecting = false,
+    this.isSelected = false,
   });
 
   @override
   Widget build(BuildContext context) {
+    final selectedColor = Theme.of(context).colorScheme.primary;
+
     return Card(
       clipBehavior: Clip.antiAlias,
+      shape: isSelected
+          ? RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: BorderSide(color: selectedColor, width: 2.5),
+            )
+          : null,
       child: InkWell(
         onTap: onTap,
         onLongPress: onLongPress,
@@ -30,7 +42,9 @@ class ObjectGridTile extends StatelessWidget {
           children: [
             Expanded(
               child: Container(
-                color: Colors.grey[100],
+                color: isSelected
+                    ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.08)
+                    : Colors.grey[100],
                 child: Stack(
                   children: [
                     Center(
@@ -40,7 +54,27 @@ class ObjectGridTile extends StatelessWidget {
                         color: FileTypeUtils.getIconColor(isFolder: object.isFolder, filename: object.name),
                       ),
                     ),
-                    if (!object.isFolder && onOptionsPressed != null)
+                    if (isSelecting)
+                      Positioned(
+                        top: 4,
+                        right: 4,
+                        child: Container(
+                          width: 24,
+                          height: 24,
+                          decoration: BoxDecoration(
+                            color: isSelected ? selectedColor : Colors.white,
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: isSelected ? selectedColor : Colors.grey,
+                              width: 2,
+                            ),
+                          ),
+                          child: isSelected
+                              ? const Icon(Icons.check, size: 16, color: Colors.white)
+                              : null,
+                        ),
+                      )
+                    else if (!object.isFolder && onOptionsPressed != null)
                       Positioned(
                         top: 4,
                         right: 4,

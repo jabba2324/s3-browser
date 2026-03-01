@@ -92,11 +92,31 @@ class _S3BrowserScreenState extends State<S3BrowserScreen> {
         backgroundColor: Colors.white,
         appBar: _buildAppBar(),
         body: _buildBody(),
+        bottomNavigationBar: _buildSelectionBar(),
       ),
     );
   }
 
   PreferredSizeWidget _buildAppBar() {
+    if (_controller.isSelecting) {
+      return AppBar(
+        backgroundColor: Colors.white,
+        leading: IconButton(
+          icon: const Icon(Icons.close),
+          onPressed: _controller.clearSelection,
+          tooltip: 'Cancel',
+        ),
+        title: Text('${_controller.selectedObjects.length} selected'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.select_all),
+            onPressed: _controller.selectAll,
+            tooltip: 'Select all',
+          ),
+        ],
+      );
+    }
+
     return AppBar(
       title: _isSearching
           ? TextField(
@@ -168,6 +188,16 @@ class _S3BrowserScreenState extends State<S3BrowserScreen> {
           onSelected: _handleMenuAction,
           itemBuilder: (context) => [
             const PopupMenuItem(
+              value: 'select',
+              child: Row(
+                children: [
+                  Icon(Icons.checklist),
+                  SizedBox(width: 8),
+                  Text('Select'),
+                ],
+              ),
+            ),
+            const PopupMenuItem(
               value: 'upload',
               child: Row(
                 children: [
@@ -213,8 +243,28 @@ class _S3BrowserScreenState extends State<S3BrowserScreen> {
     );
   }
 
+  Widget? _buildSelectionBar() {
+    if (!_controller.isSelecting || _controller.selectedFiles.isEmpty) return null;
+    final count = _controller.selectedFiles.length;
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+        child: ElevatedButton.icon(
+          icon: const Icon(Icons.share),
+          label: Text('Share $count file${count == 1 ? '' : 's'}'),
+          onPressed: _shareSelected,
+          style: ElevatedButton.styleFrom(
+            minimumSize: const Size.fromHeight(48),
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _handleMenuAction(String value) async {
-    if (value == 'upload') {
+    if (value == 'select') {
+      _controller.enterSelectionMode();
+    } else if (value == 'upload') {
       final result = await _controller.uploadFile();
       if (result != null) {
         _showResultSnackBar(result);
@@ -297,9 +347,13 @@ class _S3BrowserScreenState extends State<S3BrowserScreen> {
             final object = _controller.filteredObjects[index];
             return ObjectGridTile(
               object: object,
-              onTap: () => _handleObjectTap(object),
-              onLongPress: object.isFolder ? null : () => _showFileOptions(object),
-              onOptionsPressed: () => _showFileOptions(object),
+              isSelecting: _controller.isSelecting,
+              isSelected: _controller.isSelected(object.key),
+              onTap: () => _controller.isSelecting
+                  ? _controller.toggleSelection(object.key)
+                  : _handleObjectTap(object),
+              onLongPress: () => _controller.toggleSelection(object.key),
+              onOptionsPressed: _controller.isSelecting ? null : () => _showFileOptions(object),
             );
           },
         ),
@@ -318,8 +372,13 @@ class _S3BrowserScreenState extends State<S3BrowserScreen> {
         final object = _controller.filteredObjects[index];
         return ObjectListTile(
           object: object,
-          onTap: () => _handleObjectTap(object),
-          onOptionsPressed: () => _showFileOptions(object),
+          isSelecting: _controller.isSelecting,
+          isSelected: _controller.isSelected(object.key),
+          onTap: () => _controller.isSelecting
+              ? _controller.toggleSelection(object.key)
+              : _handleObjectTap(object),
+          onLongPress: () => _controller.toggleSelection(object.key),
+          onOptionsPressed: _controller.isSelecting ? null : () => _showFileOptions(object),
         );
       },
     ),
@@ -380,6 +439,16 @@ class _S3BrowserScreenState extends State<S3BrowserScreen> {
         : null;
 
     final result = await _controller.shareFile(object, sharePositionOrigin: sharePositionOrigin);
+    _showResultSnackBar(result);
+  }
+
+  Future<void> _shareSelected() async {
+    final box = context.findRenderObject() as RenderBox?;
+    final sharePositionOrigin = box != null
+        ? Rect.fromLTWH(0, 0, box.size.width, box.size.height / 2)
+        : null;
+
+    final result = await _controller.shareSelectedFiles(sharePositionOrigin: sharePositionOrigin);
     _showResultSnackBar(result);
   }
 

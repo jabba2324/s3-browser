@@ -7,25 +7,37 @@ import '../../utils/format_utils.dart';
 class ObjectListTile extends StatelessWidget {
   final S3Object object;
   final VoidCallback? onTap;
+  final VoidCallback? onLongPress;
   final VoidCallback? onOptionsPressed;
+  final bool isSelecting;
+  final bool isSelected;
 
   const ObjectListTile({
     super.key,
     required this.object,
     this.onTap,
+    this.onLongPress,
     this.onOptionsPressed,
+    this.isSelecting = false,
+    this.isSelected = false,
   });
 
   @override
   Widget build(BuildContext context) {
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 4.0, horizontal: 8.0),
+      color: isSelected ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.08) : null,
       child: ListTile(
-        leading: Icon(
-          FileTypeUtils.getIcon(isFolder: object.isFolder, filename: object.name),
-          size: 40,
-          color: FileTypeUtils.getIconColor(isFolder: object.isFolder, filename: object.name),
-        ),
+        leading: isSelecting
+            ? Checkbox(
+                value: isSelected,
+                onChanged: (_) => onTap?.call(),
+              )
+            : Icon(
+                FileTypeUtils.getIcon(isFolder: object.isFolder, filename: object.name),
+                size: 40,
+                color: FileTypeUtils.getIconColor(isFolder: object.isFolder, filename: object.name),
+              ),
         title: Text(
           object.name,
           style: const TextStyle(
@@ -42,13 +54,16 @@ class ObjectListTile extends StatelessWidget {
                   fontSize: 14,
                 ),
               ),
-        trailing: object.isFolder
-            ? const Icon(Icons.chevron_right)
-            : IconButton(
-                icon: const Icon(Icons.more_vert),
-                onPressed: onOptionsPressed,
-              ),
+        trailing: isSelecting
+            ? null
+            : object.isFolder
+                ? const Icon(Icons.chevron_right)
+                : IconButton(
+                    icon: const Icon(Icons.more_vert),
+                    onPressed: onOptionsPressed,
+                  ),
         onTap: onTap,
+        onLongPress: onLongPress,
       ),
     );
   }
