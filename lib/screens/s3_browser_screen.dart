@@ -83,6 +83,28 @@ class _S3BrowserScreenState extends State<S3BrowserScreen> {
             )
           : null,
       actions: [
+        PopupMenuButton<SortOption>(
+          icon: const Icon(Icons.sort),
+          tooltip: 'Sort',
+          onSelected: _controller.setSortOption,
+          itemBuilder: (context) => SortOption.values.map((option) {
+            return PopupMenuItem(
+              value: option,
+              child: Row(
+                children: [
+                  Icon(
+                    _controller.sortOption == option
+                        ? Icons.radio_button_checked
+                        : Icons.radio_button_unchecked,
+                    size: 18,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(option.label),
+                ],
+              ),
+            );
+          }).toList(),
+        ),
         IconButton(
           icon: Icon(_controller.isGridView ? Icons.view_list : Icons.grid_view),
           onPressed: _controller.toggleGridView,
@@ -103,6 +125,16 @@ class _S3BrowserScreenState extends State<S3BrowserScreen> {
                   Icon(Icons.upload_file),
                   SizedBox(width: 8),
                   Text('Upload'),
+                ],
+              ),
+            ),
+            const PopupMenuItem(
+              value: 'create_folder',
+              child: Row(
+                children: [
+                  Icon(Icons.create_new_folder),
+                  SizedBox(width: 8),
+                  Text('Create Folder'),
                 ],
               ),
             ),
@@ -128,6 +160,8 @@ class _S3BrowserScreenState extends State<S3BrowserScreen> {
       if (result != null) {
         _showResultSnackBar(result);
       }
+    } else if (value == 'create_folder') {
+      _showCreateFolderDialog();
     } else if (value == 'logout') {
       await _authStorage.clearCredentials();
       widget.s3Service.disconnect();
@@ -298,6 +332,25 @@ class _S3BrowserScreenState extends State<S3BrowserScreen> {
     );
     if (confirmed) {
       final result = await _controller.deleteFile(object);
+      _showResultSnackBar(result);
+    }
+  }
+
+  void _showCreateFolderDialog() async {
+    final folderName = await TextInputDialog.show(
+      context: context,
+      title: 'Create Folder',
+      labelText: 'Folder name',
+      hintText: 'e.g. photos',
+      confirmLabel: 'Create',
+      validator: (value) {
+        if (value == null || value.trim().isEmpty) return 'Name cannot be empty';
+        if (value.contains('/')) return 'Name cannot contain /';
+        return null;
+      },
+    );
+    if (folderName != null) {
+      final result = await _controller.createFolder(folderName.trim());
       _showResultSnackBar(result);
     }
   }

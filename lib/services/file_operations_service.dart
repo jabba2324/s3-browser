@@ -151,6 +151,26 @@ class FileOperationsService {
     }
   }
 
+  /// Creates a folder in S3 by uploading a zero-byte object with a trailing slash
+  Future<FileOperationResult> createFolder(
+    String currentPrefix,
+    String folderName,
+  ) async {
+    try {
+      final objectKey = '$currentPrefix$folderName/';
+      await browserService.uploadObject(objectKey, Uint8List(0));
+      return FileOperationResult.success(
+        'Created folder "$folderName"',
+        fileName: folderName,
+      );
+    } catch (e) {
+      return FileOperationResult.failure(
+        'Error creating folder: ${e.toString()}',
+        fileName: folderName,
+      );
+    }
+  }
+
   /// Uploads raw bytes to S3
   Future<FileOperationResult> uploadBytes(
     String objectKey,

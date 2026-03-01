@@ -100,13 +100,6 @@ class S3BrowserService {
       }
     }
 
-    // Sort: folders first, then files, both alphabetically
-    objects.sort((a, b) {
-      if (a.isFolder && !b.isFolder) return -1;
-      if (!a.isFolder && b.isFolder) return 1;
-      return a.name.toLowerCase().compareTo(b.name.toLowerCase());
-    });
-
     return objects;
   }
 

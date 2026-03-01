@@ -4,6 +4,26 @@ import '../services/file_operations_service.dart';
 import '../services/s3_browser_service.dart';
 import '../utils/file_type_utils.dart';
 
+enum SortOption {
+  nameAsc,
+  nameDesc,
+  dateNewest,
+  dateOldest,
+  sizeLargest,
+  sizeSmallest,
+}
+
+extension SortOptionLabel on SortOption {
+  String get label => switch (this) {
+    SortOption.nameAsc => 'Name (A → Z)',
+    SortOption.nameDesc => 'Name (Z → A)',
+    SortOption.dateNewest => 'Date (Newest)',
+    SortOption.dateOldest => 'Date (Oldest)',
+    SortOption.sizeLargest => 'Size (Largest)',
+    SortOption.sizeSmallest => 'Size (Smallest)',
+  };
+}
+
 /// Controller for S3 browser screen state and business logic
 class S3BrowserController extends ChangeNotifier {
   final S3BrowserService browserService;
@@ -22,9 +42,11 @@ class S3BrowserController extends ChangeNotifier {
   bool _isGridView = false;
   String _currentPrefix = '';
   String? _error;
+  SortOption _sortOption = SortOption.nameAsc;
 
   // Getters
   List<S3Object> get objects => _objects;
+  SortOption get sortOption => _sortOption;
   bool get isLoading => _isLoading;
   bool get isGridView => _isGridView;
   String get currentPrefix => _currentPrefix;
@@ -52,7 +74,8 @@ class S3BrowserController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      _objects = await browserService.listObjects(prefix: _currentPrefix);
+      final raw = await browserService.listObjects(prefix: _currentPrefix);
+      _objects = _sorted(raw);
       _isLoading = false;
       notifyListeners();
     } catch (e) {
@@ -87,6 +110,29 @@ class S3BrowserController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setSortOption(SortOption option) {
+    _sortOption = option;
+    _objects = _sorted(List.of(_objects));
+    notifyListeners();
+  }
+
+  List<S3Object> _sorted(List<S3Object> items) {
+    items.sort((a, b) {
+      // Folders always first
+      if (a.isFolder != b.isFolder) return a.isFolder ? -1 : 1;
+
+      return switch (_sortOption) {
+        SortOption.nameAsc => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+        SortOption.nameDesc => b.name.toLowerCase().compareTo(a.name.toLowerCase()),
+        SortOption.dateNewest => (b.lastModified ?? DateTime(0)).compareTo(a.lastModified ?? DateTime(0)),
+        SortOption.dateOldest => (a.lastModified ?? DateTime(0)).compareTo(b.lastModified ?? DateTime(0)),
+        SortOption.sizeLargest => (b.size ?? 0).compareTo(a.size ?? 0),
+        SortOption.sizeSmallest => (a.size ?? 0).compareTo(b.size ?? 0),
+      };
+    });
+    return items;
+  }
+
   // File operations - return results for UI to handle feedback
   Future<FileOperationResult?> uploadFile() async {
     final result = await fileOps.uploadFile(_currentPrefix);
@@ -114,6 +160,14 @@ class S3BrowserController extends ChangeNotifier {
 
   Future<FileOperationResult> renameFile(S3Object object, String newName) async {
     final result = await fileOps.renameFile(object, newName, _currentPrefix);
+    if (result.success) {
+      loadObjects();
+    }
+    return result;
+  }
+
+  Future<FileOperationResult> createFolder(String folderName) async {
+    final result = await fileOps.createFolder(_currentPrefix, folderName);
     if (result.success) {
       loadObjects();
     }
