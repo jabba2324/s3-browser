@@ -44,7 +44,7 @@ open ios/Runner.xcworkspace
 ## iOS Configuration
 
 The app is configured with:
-- Minimum iOS version: 12.0
+- Minimum iOS version: 15.0
 - Network permissions for S3 access (NSAppTransportSecurity)
 - URL scheme support for opening download links
 - All device orientations supported
