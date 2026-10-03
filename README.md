@@ -22,21 +22,14 @@ flutter run -d chrome
 
 ### iOS
 
-1. First, install iOS dependencies:
-```bash
-cd ios
-pod install
-cd ..
-```
+1. Open iOS Simulator or connect your iPhone
 
-2. Open iOS Simulator or connect your iPhone
-
-3. Run the app:
+2. Run the app:
 ```bash
 flutter run -d ios
 ```
 
-Or open in Xcode:
+Or open in Xcode (Xcode resolves Swift Package Manager dependencies automatically on build):
 ```bash
 open ios/Runner.xcworkspace
 ```
@@ -56,10 +49,7 @@ The app is configured with:
 flutter pub get
 ```
 
-2. For iOS, install CocoaPods dependencies:
-```bash
-cd ios && pod install && cd ..
-```
+iOS native dependencies are resolved via Swift Package Manager, which Xcode/`flutter build` handle automatically - no separate install step needed.
 
 ## CORS Configuration
 

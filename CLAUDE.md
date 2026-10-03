@@ -11,8 +11,7 @@ A Flutter app for browsing AWS S3 and S3-compatible buckets (e.g. Exoscale), tar
 ```bash
 flutter pub get               # install dependencies
 flutter run -d chrome         # run on Web
-flutter run -d ios            # run on iOS simulator/device
-cd ios && pod install && cd .. # required once for iOS, and after adding iOS plugins
+flutter run -d ios            # run on iOS simulator/device (resolves Swift Package Manager deps automatically)
 
 flutter analyze                # lint (flutter_lints, configured in analysis_options.yaml)
 flutter test                   # run all tests
