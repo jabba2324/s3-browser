@@ -171,25 +171,19 @@ class FileOperationsService {
   /// Returns null if user cancelled the picker
   Future<FileOperationResult?> uploadFile(String currentPrefix) async {
     try {
-      final result = await FilePicker.platform.pickFiles(
-        withData: true,
-        allowMultiple: true,
-      );
+      final files = await FilePicker.pickFiles();
 
-      if (result == null || result.files.isEmpty) {
+      if (files.isEmpty) {
         return null; // User cancelled
       }
 
       int succeeded = 0;
       final failures = <String>[];
 
-      for (final file in result.files) {
-        if (file.bytes == null) {
-          failures.add(file.name);
-          continue;
-        }
+      for (final file in files) {
         try {
-          await browserService.uploadObject(currentPrefix + file.name, file.bytes!);
+          final bytes = await file.readAsBytes();
+          await browserService.uploadObject(currentPrefix + file.name, bytes);
           succeeded++;
         } catch (_) {
           failures.add(file.name);
@@ -197,7 +191,7 @@ class FileOperationsService {
       }
 
       if (failures.isEmpty) {
-        final label = succeeded == 1 ? '"${result.files.first.name}"' : '$succeeded files';
+        final label = succeeded == 1 ? '"${files.first.name}"' : '$succeeded files';
         return FileOperationResult.success('Uploaded $label');
       } else if (succeeded == 0) {
         return FileOperationResult.failure('Failed to upload ${failures.length} file(s)');
