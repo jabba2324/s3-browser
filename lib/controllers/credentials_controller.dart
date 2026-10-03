@@ -20,11 +20,13 @@ class CredentialsController extends ChangeNotifier {
   List<SavedConnection> _savedConnections = [];
   bool _isLoading = true;
   bool _isConnecting = false;
+  String? _connectingId;
 
   // Getters
   List<SavedConnection> get savedConnections => _savedConnections;
   bool get isLoading => _isLoading;
   bool get isConnecting => _isConnecting;
+  String? get connectingId => _connectingId;
   bool get hasSavedCredentials => _savedConnections.isNotEmpty;
   AuthS3Service get s3Service => _s3Service;
 
@@ -49,8 +51,10 @@ class CredentialsController extends ChangeNotifier {
     required String secretKey,
     String? endpoint,
     required String bucketPath,
+    String? connectionId,
   }) async {
     _isConnecting = true;
+    _connectingId = connectionId;
     notifyListeners();
 
     try {
@@ -70,11 +74,13 @@ class CredentialsController extends ChangeNotifier {
       );
 
       _isConnecting = false;
+      _connectingId = null;
       notifyListeners();
 
       return ConnectionResult.success(_s3Service);
     } catch (e) {
       _isConnecting = false;
+      _connectingId = null;
       notifyListeners();
 
       return ConnectionResult.failure(_getErrorMessage(e));
@@ -88,6 +94,7 @@ class CredentialsController extends ChangeNotifier {
       secretKey: connection.secretKey,
       endpoint: connection.endpoint,
       bucketPath: connection.bucketPath,
+      connectionId: connection.id,
     );
   }
 

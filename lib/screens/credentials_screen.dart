@@ -138,8 +138,10 @@ class _CredentialsScreenState extends State<CredentialsScreen> {
                         const SizedBox(height: 12),
                         ..._controller.savedConnections.map((connection) => SavedConnectionCard(
                           connection: connection,
-                          isConnecting: _controller.isConnecting,
-                          onConnect: () => _handleSavedConnect(connection),
+                          isConnecting: _controller.connectingId == connection.id,
+                          onConnect: _controller.isConnecting
+                              ? null
+                              : () => _handleSavedConnect(connection),
                           onDelete: () => _controller.deleteConnection(connection.id),
                         )),
                         const SizedBox(height: 24),

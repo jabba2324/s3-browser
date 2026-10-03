@@ -43,7 +43,7 @@ class SavedConnectionCard extends StatelessWidget {
               ),
               const SizedBox(width: 4),
               ElevatedButton(
-                onPressed: isConnecting ? null : onConnect,
+                onPressed: onConnect,
                 style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   minimumSize: const Size(70, 32),
