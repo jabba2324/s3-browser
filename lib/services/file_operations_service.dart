@@ -6,6 +6,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/file_operation_result.dart';
 import '../platform/file_handler.dart';
+import '../utils/format_utils.dart';
 import 's3_browser_service.dart';
 
 export '../models/file_operation_result.dart';
@@ -179,27 +180,45 @@ class FileOperationsService {
 
       int succeeded = 0;
       final failures = <String>[];
+      final tooLarge = <String>[];
 
       for (final file in files) {
         try {
-          final bytes = await file.readAsBytes();
-          await browserService.uploadObject(currentPrefix + file.name, bytes);
+          final size = file.lengthSync() ?? await file.length();
+          if (size == null) {
+            failures.add(file.name);
+            continue;
+          }
+          await browserService.uploadObjectStream(
+            currentPrefix + file.name,
+            file.readAsByteStream(),
+            size,
+          );
           succeeded++;
+        } on FileTooLargeException {
+          tooLarge.add(file.name);
         } catch (_) {
           failures.add(file.name);
         }
       }
 
-      if (failures.isEmpty) {
+      if (failures.isEmpty && tooLarge.isEmpty) {
         final label = succeeded == 1 ? '"${files.first.name}"' : '$succeeded files';
         return FileOperationResult.success('Uploaded $label');
-      } else if (succeeded == 0) {
-        return FileOperationResult.failure('Failed to upload ${failures.length} file(s)');
-      } else {
-        return FileOperationResult.success(
-          'Uploaded $succeeded file(s), ${failures.length} failed',
-        );
       }
+
+      final parts = <String>[];
+      if (succeeded > 0) parts.add('Uploaded $succeeded file(s)');
+      if (tooLarge.isNotEmpty) {
+        final maxSize = FormatUtils.fileSize(S3BrowserService.maxUploadSizeBytes);
+        parts.add('${tooLarge.length} too large (max $maxSize)');
+      }
+      if (failures.isNotEmpty) parts.add('${failures.length} failed');
+
+      final message = parts.join(', ');
+      return succeeded == 0
+          ? FileOperationResult.failure(message)
+          : FileOperationResult.success(message);
     } catch (e) {
       return FileOperationResult.failure('Error uploading: ${e.toString()}');
     }

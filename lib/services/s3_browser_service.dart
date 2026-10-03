@@ -4,9 +4,26 @@ import '../models/s3_object.dart';
 
 export '../models/s3_object.dart';
 
+/// Thrown by [S3BrowserService.uploadObjectStream] when a file exceeds
+/// [S3BrowserService.maxUploadSizeBytes].
+class FileTooLargeException implements Exception {
+  final int size;
+  final int maxSize;
+
+  FileTooLargeException({required this.size, required this.maxSize});
+}
+
 class S3BrowserService {
   final Minio client;
   final String bucketName;
+
+  /// Client-side cap on a single upload. S3 itself allows up to 5 GiB in a
+  /// single PutObject, but this app loads file data from disk into a
+  /// streamed upload on a mobile device - letting users attempt multi-GB
+  /// uploads well before that is a bad experience (battery/data usage, long
+  /// waits with no feedback) rather than a real protocol limit, so this
+  /// gives a clear error well short of it instead.
+  static const int maxUploadSizeBytes = 2 * 1024 * 1024 * 1024; // 2 GB
 
   S3BrowserService({
     required this.client,
@@ -124,13 +141,26 @@ class S3BrowserService {
     await deleteObject(sourceKey);
   }
 
-  /// Upload a file to S3
+  /// Streams [size] bytes from [dataStream] to S3. The minio client chunks
+  /// the stream internally (multipart upload for larger sizes), so the
+  /// caller never needs to hold the whole file in memory - read directly
+  /// from disk rather than loading bytes up front first.
+  ///
+  /// Throws [FileTooLargeException] if [size] exceeds [maxUploadSizeBytes].
+  Future<void> uploadObjectStream(
+    String objectKey,
+    Stream<Uint8List> dataStream,
+    int size,
+  ) async {
+    if (size > maxUploadSizeBytes) {
+      throw FileTooLargeException(size: size, maxSize: maxUploadSizeBytes);
+    }
+    await client.putObject(bucketName, objectKey, dataStream, size: size);
+  }
+
+  /// Convenience wrapper for already-in-memory data (e.g. the empty-object
+  /// folder marker). Prefer [uploadObjectStream] when uploading a file.
   Future<void> uploadObject(String objectKey, Uint8List data) async {
-    await client.putObject(
-      bucketName,
-      objectKey,
-      Stream.value(data),
-      size: data.length,
-    );
+    await uploadObjectStream(objectKey, Stream.value(data), data.length);
   }
 }

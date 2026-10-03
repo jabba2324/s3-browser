@@ -4,6 +4,7 @@ import 'package:minio/minio.dart';
 import '../services/auth_storage_service.dart';
 import '../services/s3_browser_service.dart';
 import '../services/shared_files_service.dart';
+import '../utils/format_utils.dart';
 
 /// Controller for shared upload screen state and logic
 class SharedUploadController extends ChangeNotifier {
@@ -160,9 +161,12 @@ class SharedUploadController extends ChangeNotifier {
 
         final filename = filePath.split('/').last;
         final objectKey = '$_currentPrefix$filename';
-        final bytes = await file.readAsBytes();
+        final size = await file.length();
+        final stream = file.openRead().map(
+          (chunk) => chunk is Uint8List ? chunk : Uint8List.fromList(chunk),
+        );
 
-        await _browserService!.uploadObject(objectKey, bytes);
+        await _browserService!.uploadObjectStream(objectKey, stream, size);
 
         _uploadedCount = i + 1;
         _uploadProgress = _uploadedCount / filePaths.length;
@@ -175,6 +179,11 @@ class SharedUploadController extends ChangeNotifier {
       _isUploading = false;
       notifyListeners();
       return true;
+    } on FileTooLargeException catch (e) {
+      _isUploading = false;
+      _error = 'File too large to upload (max ${FormatUtils.fileSize(e.maxSize)})';
+      notifyListeners();
+      return false;
     } catch (e) {
       _isUploading = false;
       _error = 'Upload failed: $e';
