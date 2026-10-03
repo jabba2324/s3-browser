@@ -39,7 +39,7 @@ dependencies:
   minio: ^3.5.8
   
   # Secure storage for credentials
-  flutter_secure_storage: ^9.2.2
+  flutter_secure_storage: ^10.3.1
   
   # URL launcher for opening download links
   url_launcher: ^6.3.1
