@@ -65,11 +65,11 @@ class FileOperationsService {
 
         final tempPath = await saveToTempFile(object.name, response.bodyBytes);
 
-        await Share.shareXFiles(
-          [XFile(tempPath)],
+        await SharePlus.instance.share(ShareParams(
+          files: [XFile(tempPath)],
           subject: object.name,
           sharePositionOrigin: sharePositionOrigin,
-        );
+        ));
 
         return FileOperationResult.success(
           'Shared "${object.name}"',
@@ -112,7 +112,10 @@ class FileOperationsService {
         return FileOperationResult.failure('Failed to prepare files for sharing');
       }
 
-      await Share.shareXFiles(tempFiles, sharePositionOrigin: sharePositionOrigin);
+      await SharePlus.instance.share(ShareParams(
+        files: tempFiles,
+        sharePositionOrigin: sharePositionOrigin,
+      ));
 
       if (failures.isEmpty) {
         final label = tempFiles.length == 1 ? '"${objects.first.name}"' : '${tempFiles.length} files';
