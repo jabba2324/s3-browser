@@ -29,18 +29,19 @@ class S3BrowserController extends ChangeNotifier {
   final S3BrowserService browserService;
   final FileOperationsService fileOps;
   final String bucketName;
+  final String currentPrefix;
 
   S3BrowserController({
     required this.browserService,
     required this.fileOps,
     required this.bucketName,
+    this.currentPrefix = '',
   });
 
   // State
   List<S3Object> _objects = [];
   bool _isLoading = true;
   bool _isGridView = false;
-  String _currentPrefix = '';
   String? _error;
   SortOption _sortOption = SortOption.nameAsc;
   String _filterQuery = '';
@@ -58,9 +59,7 @@ class S3BrowserController extends ChangeNotifier {
   SortOption get sortOption => _sortOption;
   bool get isLoading => _isLoading;
   bool get isGridView => _isGridView;
-  String get currentPrefix => _currentPrefix;
   String? get error => _error;
-  bool get canNavigateUp => _currentPrefix.isNotEmpty;
   bool get isSelecting => _isSelectionMode || _selectedKeys.isNotEmpty;
   bool isSelected(String key) => _selectedKeys.contains(key);
   List<S3Object> get selectedObjects =>
@@ -69,8 +68,8 @@ class S3BrowserController extends ChangeNotifier {
       selectedObjects.where((o) => !o.isFolder).toList();
 
   String get currentFolderName {
-    if (_currentPrefix.isEmpty) return bucketName;
-    final parts = _currentPrefix.split('/');
+    if (currentPrefix.isEmpty) return bucketName;
+    final parts = currentPrefix.split('/');
     parts.removeLast(); // Remove empty string at end
     return parts.isEmpty ? bucketName : parts.last;
   }
@@ -89,7 +88,7 @@ class S3BrowserController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final raw = await browserService.listObjects(prefix: _currentPrefix);
+      final raw = await browserService.listObjects(prefix: currentPrefix);
       _objects = _sorted(raw);
       _isLoading = false;
       notifyListeners();
@@ -127,32 +126,6 @@ class S3BrowserController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void navigateToFolder(String folderKey) {
-    _currentPrefix = folderKey;
-    _filterQuery = '';
-    _selectedKeys.clear();
-    _isSelectionMode = false;
-    notifyListeners();
-    loadObjects();
-  }
-
-  void navigateUp() {
-    if (_currentPrefix.isEmpty) return;
-
-    final parts = _currentPrefix.split('/');
-    parts.removeLast(); // Remove empty string at end
-    if (parts.isNotEmpty) {
-      parts.removeLast(); // Remove last folder
-    }
-
-    _currentPrefix = parts.isEmpty ? '' : '${parts.join('/')}/';
-    _filterQuery = '';
-    _selectedKeys.clear();
-    _isSelectionMode = false;
-    notifyListeners();
-    loadObjects();
-  }
-
   void toggleGridView() {
     _isGridView = !_isGridView;
     notifyListeners();
@@ -188,7 +161,7 @@ class S3BrowserController extends ChangeNotifier {
 
   // File operations - return results for UI to handle feedback
   Future<FileOperationResult?> uploadFile() async {
-    final result = await fileOps.uploadFile(_currentPrefix);
+    final result = await fileOps.uploadFile(currentPrefix);
     if (result != null && result.success) {
       loadObjects();
     }
@@ -221,7 +194,7 @@ class S3BrowserController extends ChangeNotifier {
   }
 
   Future<FileOperationResult> renameFile(S3Object object, String newName) async {
-    final result = await fileOps.renameFile(object, newName, _currentPrefix);
+    final result = await fileOps.renameFile(object, newName, currentPrefix);
     if (result.success) {
       loadObjects();
     }
@@ -229,7 +202,7 @@ class S3BrowserController extends ChangeNotifier {
   }
 
   Future<FileOperationResult> createFolder(String folderName) async {
-    final result = await fileOps.createFolder(_currentPrefix, folderName);
+    final result = await fileOps.createFolder(currentPrefix, folderName);
     if (result.success) {
       loadObjects();
     }

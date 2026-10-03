@@ -15,10 +15,12 @@ import 'video_viewer_screen.dart';
 
 class S3BrowserScreen extends StatefulWidget {
   final AuthS3Service s3Service;
+  final String initialPrefix;
 
   const S3BrowserScreen({
     super.key,
     required this.s3Service,
+    this.initialPrefix = '',
   });
 
   @override
@@ -42,6 +44,7 @@ class _S3BrowserScreenState extends State<S3BrowserScreen> {
       browserService: browserService,
       fileOps: FileOperationsService(browserService: browserService),
       bucketName: widget.s3Service.bucketName ?? 'Bucket',
+      currentPrefix: widget.initialPrefix,
     );
     _controller.loadObjects();
   }
@@ -145,12 +148,7 @@ class _S3BrowserScreenState extends State<S3BrowserScreen> {
               icon: const Icon(Icons.close),
               onPressed: _stopSearch,
             )
-          : _controller.canNavigateUp
-              ? IconButton(
-                  icon: const Icon(Icons.arrow_back),
-                  onPressed: _controller.navigateUp,
-                )
-              : null,
+          : null,
       actions: _isSearching ? [] : [
         IconButton(
           icon: const Icon(Icons.search),
@@ -227,16 +225,17 @@ class _S3BrowserScreenState extends State<S3BrowserScreen> {
                 ],
               ),
             ),
-            const PopupMenuItem(
-              value: 'logout',
-              child: Row(
-                children: [
-                  Icon(Icons.logout),
-                  SizedBox(width: 8),
-                  Text('Logout'),
-                ],
+            if (widget.initialPrefix.isEmpty)
+              const PopupMenuItem(
+                value: 'logout',
+                child: Row(
+                  children: [
+                    Icon(Icons.logout),
+                    SizedBox(width: 8),
+                    Text('Logout'),
+                  ],
+                ),
               ),
-            ),
           ],
         ),
       ],
@@ -277,6 +276,7 @@ class _S3BrowserScreenState extends State<S3BrowserScreen> {
       await _authStorage.clearCredentials();
       widget.s3Service.disconnect();
       if (mounted) {
+        Navigator.popUntil(context, (route) => route.isFirst);
         Navigator.pop(context);
       }
     }
@@ -387,7 +387,15 @@ class _S3BrowserScreenState extends State<S3BrowserScreen> {
 
   void _handleObjectTap(S3Object object) {
     if (object.isFolder) {
-      _controller.navigateToFolder(object.key);
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => S3BrowserScreen(
+            s3Service: widget.s3Service,
+            initialPrefix: object.key,
+          ),
+        ),
+      );
     } else if (FileTypeUtils.isImage(object.name)) {
       _openPhotoViewer(object);
     } else if (FileTypeUtils.isVideo(object.name)) {
