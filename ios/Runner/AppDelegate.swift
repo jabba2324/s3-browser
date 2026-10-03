@@ -4,26 +4,31 @@ import AVKit
 import AVFoundation
 
 @main
-@objc class AppDelegate: FlutterAppDelegate {
+@objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
   private var sharedFilesChannel: FlutterMethodChannel?
 
   override func application(
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
-    GeneratedPluginRegistrant.register(with: self)
+    return super.application(application, didFinishLaunchingWithOptions: launchOptions)
+  }
+
+  func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
+    GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
+
+    let messenger = engineBridge.applicationRegistrar.messenger()
 
     // Set up method channel for native video player
-    let controller = window?.rootViewController as! FlutterViewController
     let videoChannel = FlutterMethodChannel(
       name: "com.s3browser/video",
-      binaryMessenger: controller.binaryMessenger
+      binaryMessenger: messenger
     )
 
     // Set up method channel for shared files
     sharedFilesChannel = FlutterMethodChannel(
       name: "com.s3browser/shared_files",
-      binaryMessenger: controller.binaryMessenger
+      binaryMessenger: messenger
     )
 
     sharedFilesChannel?.setMethodCallHandler { (call, result) in
@@ -68,7 +73,7 @@ import AVFoundation
     // Set up method channel for sharing credentials with extension
     let credentialsChannel = FlutterMethodChannel(
       name: "com.s3browser/credentials",
-      binaryMessenger: controller.binaryMessenger
+      binaryMessenger: messenger
     )
 
     credentialsChannel.setMethodCallHandler { (call, result) in
@@ -99,8 +104,6 @@ import AVFoundation
         result(FlutterMethodNotImplemented)
       }
     }
-
-    return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 
   private func presentVideoPlayer(url: URL) {
