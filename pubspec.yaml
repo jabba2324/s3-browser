@@ -124,3 +124,8 @@ flutter_launcher_icons:
     background_color: "#FFFFFF"
   image_path: "assets/icon.png"
   remove_alpha_ios: true
+
+# Pinned to a local patched copy - see third_party/minio/PATCH.md for why.
+dependency_overrides:
+  minio:
+    path: third_party/minio
