@@ -5,9 +5,11 @@ import '../services/auth_storage_service.dart';
 import '../services/s3_browser_service.dart';
 import '../services/shared_files_service.dart';
 import '../utils/format_utils.dart';
+import '../utils/s3_endpoint.dart';
+import 'async_loading_mixin.dart';
 
 /// Controller for shared upload screen state and logic
-class SharedUploadController extends ChangeNotifier {
+class SharedUploadController extends ChangeNotifier with AsyncLoadingMixin {
   final AuthStorageService _authStorage;
   final List<String> filePaths;
 
@@ -22,9 +24,7 @@ class SharedUploadController extends ChangeNotifier {
   S3BrowserService? _browserService;
   String _currentPrefix = '';
   List<S3Object> _folders = [];
-  bool _isLoading = true;
   bool _isUploading = false;
-  String? _error;
   double _uploadProgress = 0;
   int _uploadedCount = 0;
 
@@ -33,9 +33,7 @@ class SharedUploadController extends ChangeNotifier {
   SavedConnection? get selectedConnection => _selectedConnection;
   String get currentPrefix => _currentPrefix;
   List<S3Object> get folders => _folders;
-  bool get isLoading => _isLoading;
   bool get isUploading => _isUploading;
-  String? get error => _error;
   double get uploadProgress => _uploadProgress;
   int get uploadedCount => _uploadedCount;
   int get totalFiles => filePaths.length;
@@ -44,29 +42,17 @@ class SharedUploadController extends ChangeNotifier {
   String get displayPath => _currentPrefix.isEmpty ? '/ (root)' : '/$_currentPrefix';
 
   /// Load saved connections from storage
-  Future<void> loadConnections() async {
-    _isLoading = true;
-    _error = null;
-    notifyListeners();
+  Future<void> loadConnections() => runLoading(errorPrefix: 'Failed to load connections', () async {
+    final connections = await _authStorage.loadConnections();
+    _connections = connections;
 
-    try {
-      final connections = await _authStorage.loadConnections();
-      _connections = connections;
-      _isLoading = false;
-
-      if (connections.isEmpty) {
-        _error = 'No saved buckets found. Please add a bucket in the main app first.';
-      } else {
-        _selectedConnection = connections.first;
-        _initBrowserService();
-      }
-      notifyListeners();
-    } catch (e) {
-      _isLoading = false;
-      _error = 'Failed to load connections: $e';
-      notifyListeners();
+    if (connections.isEmpty) {
+      error = 'No saved buckets found. Please add a bucket in the main app first.';
+    } else {
+      _selectedConnection = connections.first;
+      _initBrowserService();
     }
-  }
+  });
 
   /// Select a different connection
   void selectConnection(SavedConnection? connection) {
@@ -81,13 +67,14 @@ class SharedUploadController extends ChangeNotifier {
     if (_selectedConnection == null) return;
 
     final conn = _selectedConnection!;
+    final parsed = S3Endpoint.parse(conn.endpoint);
     final minio = Minio(
-      endPoint: conn.endpoint?.isNotEmpty == true
-          ? conn.endpoint!.replaceAll('https://', '').replaceAll('http://', '')
-          : 's3.amazonaws.com',
+      endPoint: parsed.host,
+      port: parsed.port,
       accessKey: conn.accessKey,
       secretKey: conn.secretKey,
-      useSSL: conn.endpoint?.startsWith('http://') != true,
+      useSSL: parsed.useSSL,
+      region: parsed.region,
     );
 
     _browserService = S3BrowserService(
@@ -102,20 +89,10 @@ class SharedUploadController extends ChangeNotifier {
   Future<void> loadFolders() async {
     if (_browserService == null) return;
 
-    _isLoading = true;
-    notifyListeners();
-
-    try {
+    await runLoading(errorPrefix: 'Failed to load folders', () async {
       final objects = await _browserService!.listObjects(prefix: _currentPrefix);
       _folders = objects.where((o) => o.isFolder).toList();
-      _isLoading = false;
-      _error = null;
-      notifyListeners();
-    } catch (e) {
-      _isLoading = false;
-      _error = 'Failed to load folders: $e';
-      notifyListeners();
-    }
+    });
   }
 
   /// Navigate into a folder
@@ -147,7 +124,7 @@ class SharedUploadController extends ChangeNotifier {
     _isUploading = true;
     _uploadProgress = 0;
     _uploadedCount = 0;
-    _error = null;
+    error = null;
     notifyListeners();
 
     try {
@@ -181,12 +158,12 @@ class SharedUploadController extends ChangeNotifier {
       return true;
     } on FileTooLargeException catch (e) {
       _isUploading = false;
-      _error = 'File too large to upload (max ${FormatUtils.fileSize(e.maxSize)})';
+      error = 'File too large to upload (max ${FormatUtils.fileSize(e.maxSize)})';
       notifyListeners();
       return false;
     } catch (e) {
       _isUploading = false;
-      _error = 'Upload failed: $e';
+      error = 'Upload failed: $e';
       notifyListeners();
       return false;
     }

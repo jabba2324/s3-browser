@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../controllers/shared_upload_controller.dart';
 import '../services/shared_files_service.dart';
+import '../utils/snackbar_utils.dart';
 import '../widgets/upload/upload.dart';
 
 class SharedUploadScreen extends StatefulWidget {
@@ -31,11 +32,10 @@ class _SharedUploadScreenState extends State<SharedUploadScreen> {
   Future<void> _handleUpload() async {
     final success = await _controller.uploadFiles();
     if (success && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Successfully uploaded ${widget.filePaths.length} file(s)'),
-          backgroundColor: Colors.green,
-        ),
+      SnackbarUtils.showResult(
+        context,
+        'Successfully uploaded ${widget.filePaths.length} file(s)',
+        success: true,
       );
       Navigator.of(context).pop(true);
     }

@@ -17,9 +17,24 @@ class FileOperationsService {
 
   FileOperationsService({required this.browserService});
 
-  /// Downloads/opens a file by launching its URL
-  Future<FileOperationResult> downloadFile(S3Object object) async {
+  /// Runs [body], converting a thrown exception into a [FileOperationResult.failure]
+  /// prefixed with [errorPrefix] - the shape every operation below otherwise
+  /// repeated by hand.
+  Future<FileOperationResult> _guard(
+    Future<FileOperationResult> Function() body, {
+    required String errorPrefix,
+    String? fileName,
+  }) async {
     try {
+      return await body();
+    } catch (e) {
+      return FileOperationResult.failure('$errorPrefix: $e', fileName: fileName);
+    }
+  }
+
+  /// Downloads/opens a file by launching its URL
+  Future<FileOperationResult> downloadFile(S3Object object) {
+    return _guard(errorPrefix: 'Error', fileName: object.name, () async {
       final url = await browserService.getDownloadUrl(object.key);
       final uri = Uri.parse(url);
 
@@ -35,20 +50,15 @@ class FileOperationsService {
           fileName: object.name,
         );
       }
-    } catch (e) {
-      return FileOperationResult.failure(
-        'Error: ${e.toString()}',
-        fileName: object.name,
-      );
-    }
+    });
   }
 
   /// Shares a file - copies URL to clipboard on web, native share on mobile
   Future<FileOperationResult> shareFile(
     S3Object object, {
     Rect? sharePositionOrigin,
-  }) async {
-    try {
+  }) {
+    return _guard(errorPrefix: 'Error sharing', fileName: object.name, () async {
       final url = await browserService.getDownloadUrl(object.key);
 
       if (kIsWeb) {
@@ -77,23 +87,18 @@ class FileOperationsService {
           fileName: object.name,
         );
       }
-    } catch (e) {
-      return FileOperationResult.failure(
-        'Error sharing: ${e.toString()}',
-        fileName: object.name,
-      );
-    }
+    });
   }
 
   /// Shares multiple files via native share sheet
   Future<FileOperationResult> shareFiles(
     List<S3Object> objects, {
     Rect? sharePositionOrigin,
-  }) async {
+  }) {
     if (objects.isEmpty) {
-      return FileOperationResult.failure('No files selected to share');
+      return Future.value(FileOperationResult.failure('No files selected to share'));
     }
-    try {
+    return _guard(errorPrefix: 'Error sharing', () async {
       final tempFiles = <XFile>[];
       final failures = <String>[];
 
@@ -126,25 +131,18 @@ class FileOperationsService {
           'Shared ${tempFiles.length} file${tempFiles.length == 1 ? '' : 's'}, ${failures.length} failed',
         );
       }
-    } catch (e) {
-      return FileOperationResult.failure('Error sharing: ${e.toString()}');
-    }
+    });
   }
 
   /// Deletes an object from S3
-  Future<FileOperationResult> deleteFile(S3Object object) async {
-    try {
+  Future<FileOperationResult> deleteFile(S3Object object) {
+    return _guard(errorPrefix: 'Error deleting file', fileName: object.name, () async {
       await browserService.deleteObject(object.key);
       return FileOperationResult.success(
         'Deleted "${object.name}"',
         fileName: object.name,
       );
-    } catch (e) {
-      return FileOperationResult.failure(
-        'Error deleting file: ${e.toString()}',
-        fileName: object.name,
-      );
-    }
+    });
   }
 
   /// Renames an object in S3
@@ -152,20 +150,15 @@ class FileOperationsService {
     S3Object object,
     String newName,
     String currentPrefix,
-  ) async {
-    try {
+  ) {
+    return _guard(errorPrefix: 'Error renaming file', fileName: object.name, () async {
       final newKey = currentPrefix + newName;
       await browserService.renameObject(object.key, newKey);
       return FileOperationResult.success(
         'Renamed to "$newName"',
         fileName: newName,
       );
-    } catch (e) {
-      return FileOperationResult.failure(
-        'Error renaming file: ${e.toString()}',
-        fileName: object.name,
-      );
-    }
+    });
   }
 
   /// Picks and uploads one or more files to S3
@@ -220,7 +213,7 @@ class FileOperationsService {
           ? FileOperationResult.failure(message)
           : FileOperationResult.success(message);
     } catch (e) {
-      return FileOperationResult.failure('Error uploading: ${e.toString()}');
+      return FileOperationResult.failure('Error uploading: $e');
     }
   }
 
@@ -228,20 +221,15 @@ class FileOperationsService {
   Future<FileOperationResult> createFolder(
     String currentPrefix,
     String folderName,
-  ) async {
-    try {
+  ) {
+    return _guard(errorPrefix: 'Error creating folder', fileName: folderName, () async {
       final objectKey = '$currentPrefix$folderName/';
       await browserService.uploadObject(objectKey, Uint8List(0));
       return FileOperationResult.success(
         'Created folder "$folderName"',
         fileName: folderName,
       );
-    } catch (e) {
-      return FileOperationResult.failure(
-        'Error creating folder: ${e.toString()}',
-        fileName: folderName,
-      );
-    }
+    });
   }
 
   /// Uploads raw bytes to S3
@@ -249,18 +237,13 @@ class FileOperationsService {
     String objectKey,
     Uint8List bytes,
     String fileName,
-  ) async {
-    try {
+  ) {
+    return _guard(errorPrefix: 'Error uploading', fileName: fileName, () async {
       await browserService.uploadObject(objectKey, bytes);
       return FileOperationResult.success(
         'Uploaded "$fileName"',
         fileName: fileName,
       );
-    } catch (e) {
-      return FileOperationResult.failure(
-        'Error uploading: ${e.toString()}',
-        fileName: fileName,
-      );
-    }
+    });
   }
 }

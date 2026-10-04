@@ -4,6 +4,7 @@ import 's3_browser_screen.dart';
 import '../constants/aws_regions.dart';
 import '../controllers/credentials_controller.dart';
 import '../services/auth_storage_service.dart';
+import '../utils/snackbar_utils.dart';
 import '../widgets/cards/cards.dart';
 import '../widgets/dialogs/dialogs.dart';
 
@@ -81,12 +82,11 @@ class _CredentialsScreenState extends State<CredentialsScreen> {
       }
     } else if (result.errorMessage != null) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(result.errorMessage!),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 6),
-          ),
+        SnackbarUtils.showResult(
+          context,
+          result.errorMessage!,
+          success: false,
+          duration: const Duration(seconds: 6),
         );
       }
     }
@@ -321,7 +321,7 @@ class _CredentialsScreenState extends State<CredentialsScreen> {
       controller: _customEndpointController,
       decoration: const InputDecoration(
         labelText: 'Custom Endpoint',
-        hintText: 'https://s3.example.com',
+        hintText: 's3.example.com',
         border: OutlineInputBorder(),
         prefixIcon: Icon(Icons.link),
       ),

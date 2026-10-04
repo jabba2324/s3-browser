@@ -3,9 +3,10 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import '../services/s3_browser_service.dart';
 import '../platform/photo_viewer.dart' as platform;
+import 'async_loading_mixin.dart';
 
 /// Controller for photo viewer state and navigation logic
-class PhotoViewerController extends ChangeNotifier {
+class PhotoViewerController extends ChangeNotifier with AsyncLoadingMixin {
   final S3BrowserService browserService;
   final List<S3Object> images;
 
@@ -18,8 +19,6 @@ class PhotoViewerController extends ChangeNotifier {
   // State
   int _currentIndex;
   String? _currentImageUrl;
-  bool _isLoading = true;
-  String? _error;
   bool _isFullscreen = false;
   bool _showControls = true;
   String? _imageViewId;
@@ -30,8 +29,6 @@ class PhotoViewerController extends ChangeNotifier {
   // Getters
   int get currentIndex => _currentIndex;
   String? get currentImageUrl => _currentImageUrl;
-  bool get isLoading => _isLoading;
-  String? get error => _error;
   bool get isFullscreen => _isFullscreen;
   bool get showControls => _showControls;
   String? get imageViewId => _imageViewId;
@@ -42,28 +39,16 @@ class PhotoViewerController extends ChangeNotifier {
   int get totalCount => images.length;
 
   /// Load the current image URL
-  Future<void> loadImage() async {
-    _isLoading = true;
-    _error = null;
-    notifyListeners();
+  Future<void> loadImage() => runLoading(() async {
+    final url = await browserService.getDownloadUrl(currentImage.key);
 
-    try {
-      final url = await browserService.getDownloadUrl(currentImage.key);
-
-      if (kIsWeb) {
-        _imageViewId = 'image-${DateTime.now().millisecondsSinceEpoch}';
-        platform.registerImageElement(_imageViewId!, url);
-      }
-
-      _currentImageUrl = url;
-      _isLoading = false;
-      notifyListeners();
-    } catch (e) {
-      _error = e.toString();
-      _isLoading = false;
-      notifyListeners();
+    if (kIsWeb) {
+      _imageViewId = 'image-${DateTime.now().millisecondsSinceEpoch}';
+      platform.registerImageElement(_imageViewId!, url);
     }
-  }
+
+    _currentImageUrl = url;
+  });
 
   /// Navigate to next image
   void navigateNext() {

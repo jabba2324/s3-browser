@@ -6,6 +6,8 @@ import '../services/file_operations_service.dart';
 import '../services/s3_browser_service.dart';
 import '../utils/file_type_utils.dart';
 import '../utils/format_utils.dart';
+import '../utils/snackbar_utils.dart';
+import '../utils/validators.dart';
 import '../widgets/dialogs/dialogs.dart';
 import '../widgets/sheets/sheets.dart';
 import '../widgets/states/states.dart';
@@ -79,12 +81,7 @@ class _S3BrowserScreenState extends State<S3BrowserScreen> {
 
   void _showResultSnackBar(FileOperationResult result) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(result.message),
-        backgroundColor: result.success ? Colors.green : Colors.red,
-      ),
-    );
+    SnackbarUtils.showResult(context, result.message, success: result.success);
   }
 
   @override
@@ -495,11 +492,7 @@ class _S3BrowserScreenState extends State<S3BrowserScreen> {
       labelText: 'Folder name',
       hintText: 'e.g. photos',
       confirmLabel: 'Create',
-      validator: (value) {
-        if (value == null || value.trim().isEmpty) return 'Name cannot be empty';
-        if (value.contains('/')) return 'Name cannot contain /';
-        return null;
-      },
+      validator: Validators.objectName,
     );
     if (folderName != null) {
       final result = await _controller.createFolder(folderName.trim());
@@ -514,6 +507,7 @@ class _S3BrowserScreenState extends State<S3BrowserScreen> {
       initialValue: object.name,
       labelText: 'New name',
       confirmLabel: 'Rename',
+      validator: Validators.objectName,
     );
     if (newName != null && newName != object.name) {
       final result = await _controller.renameFile(object, newName);

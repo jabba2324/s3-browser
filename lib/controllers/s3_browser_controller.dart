@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import '../services/file_operations_service.dart';
 import '../services/s3_browser_service.dart';
 import '../utils/file_type_utils.dart';
+import 'async_loading_mixin.dart';
 
 enum SortOption {
   nameAsc,
@@ -25,7 +26,7 @@ extension SortOptionLabel on SortOption {
 }
 
 /// Controller for S3 browser screen state and business logic
-class S3BrowserController extends ChangeNotifier {
+class S3BrowserController extends ChangeNotifier with AsyncLoadingMixin {
   final S3BrowserService browserService;
   final FileOperationsService fileOps;
   final String bucketName;
@@ -40,9 +41,7 @@ class S3BrowserController extends ChangeNotifier {
 
   // State
   List<S3Object> _objects = [];
-  bool _isLoading = true;
   bool _isGridView = false;
-  String? _error;
   SortOption _sortOption = SortOption.nameAsc;
   String _filterQuery = '';
   Set<String> _selectedKeys = {};
@@ -57,9 +56,7 @@ class S3BrowserController extends ChangeNotifier {
     return _objects.where((o) => o.name.toLowerCase().contains(q)).toList();
   }
   SortOption get sortOption => _sortOption;
-  bool get isLoading => _isLoading;
   bool get isGridView => _isGridView;
-  String? get error => _error;
   bool get isSelecting => _isSelectionMode || _selectedKeys.isNotEmpty;
   bool isSelected(String key) => _selectedKeys.contains(key);
   List<S3Object> get selectedObjects =>
@@ -82,22 +79,10 @@ class S3BrowserController extends ChangeNotifier {
   }
 
   // Actions
-  Future<void> loadObjects() async {
-    _isLoading = true;
-    _error = null;
-    notifyListeners();
-
-    try {
-      final raw = await browserService.listObjects(prefix: currentPrefix);
-      _objects = _sorted(raw);
-      _isLoading = false;
-      notifyListeners();
-    } catch (e) {
-      _error = e.toString();
-      _isLoading = false;
-      notifyListeners();
-    }
-  }
+  Future<void> loadObjects() => runLoading(() async {
+    final raw = await browserService.listObjects(prefix: currentPrefix);
+    _objects = _sorted(raw);
+  });
 
   void enterSelectionMode() {
     _isSelectionMode = true;

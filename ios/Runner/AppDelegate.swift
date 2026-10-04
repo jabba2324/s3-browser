@@ -120,12 +120,23 @@ import AVFoundation
     playerViewController.player = player
 
     DispatchQueue.main.async {
-      if let rootViewController = self.window?.rootViewController {
-        rootViewController.present(playerViewController, animated: true) {
-          player.play()
-        }
+      guard let rootViewController = self.keyWindowRootViewController() else { return }
+      rootViewController.present(playerViewController, animated: true) {
+        player.play()
       }
     }
+  }
+
+  /// Under the UIScene lifecycle the window lives on FlutterSceneDelegate,
+  /// not self.window (which AppDelegate never populates), so look it up via
+  /// the active scene instead. Internal (not private) so RunnerTests can
+  /// assert this resolves while running inside a live Runner.app - that's
+  /// the exact precondition the old `self.window`-based lookup silently
+  /// failed under, breaking native video presentation.
+  func keyWindowRootViewController() -> UIViewController? {
+    UIApplication.shared.connectedScenes
+      .compactMap { ($0 as? UIWindowScene)?.keyWindow }
+      .first?.rootViewController
   }
 
   // Handle URL scheme for share extension

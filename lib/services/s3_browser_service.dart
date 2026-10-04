@@ -132,7 +132,10 @@ class S3BrowserService {
 
   /// Copy an object to a new key
   Future<void> copyObject(String sourceKey, String destinationKey) async {
-    await client.copyObject(bucketName, destinationKey, '/$bucketName/$sourceKey');
+    // x-amz-copy-source must be URL-encoded per path segment (but not the
+    // '/' separators) - minio sets this header verbatim with no encoding.
+    final encodedSourceKey = sourceKey.split('/').map(Uri.encodeComponent).join('/');
+    await client.copyObject(bucketName, destinationKey, '/$bucketName/$encodedSourceKey');
   }
 
   /// Rename an object (copy to new key, then delete original)

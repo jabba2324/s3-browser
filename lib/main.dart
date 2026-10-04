@@ -17,11 +17,29 @@ class MyApp extends StatefulWidget {
   State<MyApp> createState() => _MyAppState();
 }
 
-class _MyAppState extends State<MyApp> {
+class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _initSharedFilesHandler();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // The native share extension brings the app back to the foreground via a
+    // URL open, but on iOS's UIScene lifecycle that doesn't reach AppDelegate's
+    // legacy open-url handler once a scene is already connected (i.e. whenever
+    // the app was already running). Re-checking on resume catches that case.
+    if (state == AppLifecycleState.resumed) {
+      _handleSharedFiles();
+    }
   }
 
   void _initSharedFilesHandler() {
@@ -38,14 +56,20 @@ class _MyAppState extends State<MyApp> {
     });
   }
 
+  bool _isShowingSharedUpload = false;
+
   Future<void> _handleSharedFiles() async {
+    if (_isShowingSharedUpload) return;
+
     final files = await SharedFilesService.getPendingSharedFiles();
     if (files.isNotEmpty && navigatorKey.currentState != null) {
-      navigatorKey.currentState!.push(
+      _isShowingSharedUpload = true;
+      await navigatorKey.currentState!.push(
         MaterialPageRoute(
           builder: (context) => SharedUploadScreen(filePaths: files),
         ),
       );
+      _isShowingSharedUpload = false;
     }
   }
 

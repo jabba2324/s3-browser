@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  analyze-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - run: flutter pub get
+
+      - run: flutter analyze
+
+      - run: flutter test
+
+  ios-build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for iOS-relevant changes
+        id: changes
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            git fetch origin ${{ github.base_ref }} --depth=1
+            changed=$(git diff --name-only origin/${{ github.base_ref }}...HEAD)
+          else
+            changed=$(git diff --name-only HEAD~1 HEAD || echo "ios/")
+          fi
+          echo "$changed" | grep -qE '^ios/' && echo "ios_changed=true" >> "$GITHUB_OUTPUT" || echo "ios_changed=false" >> "$GITHUB_OUTPUT"
+
+      - uses: subosito/flutter-action@v2
+        if: steps.changes.outputs.ios_changed == 'true'
+        with:
+          channel: stable
+
+      - run: flutter pub get
+        if: steps.changes.outputs.ios_changed == 'true'
+
+      - name: Compile-check the iOS target (no signing)
+        if: steps.changes.outputs.ios_changed == 'true'
+        run: flutter build ios --no-codesign --simulator

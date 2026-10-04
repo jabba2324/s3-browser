@@ -10,6 +10,9 @@
 analyzer:
   exclude:
     - third_party/**
+    - build/**
+    - ios/**
+    - web/**
 include: package:flutter_lints/flutter.yaml
 
 linter:
