@@ -28,6 +28,16 @@ jobs:
 
       - run: flutter build web --release --base-href /s3-browser/
 
+      # Pages used to Jekyll-render PRIVACY_POLICY.md from the branch, and
+      # /PRIVACY_POLICY is linked externally, so keep publishing it. Pages
+      # serves the extensionless URL from the .html file.
+      - name: Render privacy policy
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq pandoc
+          pandoc PRIVACY_POLICY.md --standalone \
+            --metadata pagetitle="Privacy Policy - S3 Browser" \
+            -o build/web/PRIVACY_POLICY.html
+
       - uses: actions/configure-pages@v5
 
       - uses: actions/upload-pages-artifact@v3
