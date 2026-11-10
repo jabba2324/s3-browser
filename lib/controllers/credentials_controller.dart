@@ -9,12 +9,17 @@ export '../models/connection_result.dart';
 class CredentialsController extends ChangeNotifier {
   final AuthStorageService _authStorage;
   final AuthS3Service _s3Service;
+  final bool _isWeb;
 
+  /// [isWeb] defaults to [kIsWeb]; tests override it to cover both platforms'
+  /// error messages.
   CredentialsController({
     AuthStorageService? authStorage,
     AuthS3Service? s3Service,
+    bool? isWeb,
   })  : _authStorage = authStorage ?? AuthStorageService(),
-        _s3Service = s3Service ?? AuthS3Service();
+        _s3Service = s3Service ?? AuthS3Service(),
+        _isWeb = isWeb ?? kIsWeb;
 
   // State
   List<SavedConnection> _savedConnections = [];
@@ -116,10 +121,17 @@ class CredentialsController extends ChangeNotifier {
   String _getErrorMessage(Object e) {
     final errorString = e.toString();
 
+    // A network-level failure surfaces as a ClientException on every
+    // platform. Only in a browser is CORS the likely cause (and the browser
+    // hides the real reason); natively it's DNS, a refused connection, TLS,
+    // etc., and the underlying message says which.
     if (errorString.contains('Failed to fetch') ||
         errorString.contains('ClientException')) {
-      return 'Connection blocked by browser (CORS policy). '
-          'Configure CORS on your S3 bucket or use the iOS app.';
+      if (_isWeb) {
+        return 'Connection blocked by browser (CORS policy). '
+            'Configure CORS on your S3 bucket or use the iOS app.';
+      }
+      return 'Could not reach the server: ${_describeNetworkError(errorString)}';
     } else if (errorString.contains('does not exist')) {
       return 'Bucket not found or not accessible';
     } else if (errorString.contains('Access Denied') ||
@@ -128,5 +140,16 @@ class CredentialsController extends ChangeNotifier {
     }
 
     return 'Connection failed: $errorString';
+  }
+
+  /// Strips the `Exception: ` / `ClientException: ` wrapper prefixes from a
+  /// native network error, keeping the part that says what went wrong
+  /// (e.g. "Failed host lookup: 's3.example.com'", "Connection refused").
+  static String _describeNetworkError(String errorString) {
+    final detail = errorString
+        .replaceFirst(RegExp(r'^Exception:\s*'), '')
+        .replaceFirst(RegExp(r'^ClientException( with \w+)?:\s*'), '')
+        .trim();
+    return detail.isEmpty ? errorString : detail;
   }
 }

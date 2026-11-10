@@ -82,18 +82,46 @@ void main() {
           )).called(1);
     });
 
-    test('maps a CORS-shaped exception to a friendly message', () async {
+    void stubConnectThrows(Object error) {
       when(() => s3Service.connect(
             accessKey: any(named: 'accessKey'),
             secretKey: any(named: 'secretKey'),
             endpoint: any(named: 'endpoint'),
             bucketPath: any(named: 'bucketPath'),
-          )).thenThrow(Exception('ClientException: Failed to fetch'));
+          )).thenThrow(error);
+    }
+
+    test('on web, maps a network failure to the CORS message', () async {
+      controller = CredentialsController(authStorage: authStorage, s3Service: s3Service, isWeb: true);
+      stubConnectThrows(Exception('ClientException: Failed to fetch'));
 
       final result = await controller.connect(accessKey: 'a', secretKey: 's', bucketPath: 'bucket');
 
       expect(result.success, isFalse);
       expect(result.errorMessage, contains('CORS'));
+    });
+
+    test('natively, shows the real network error instead of blaming CORS', () async {
+      controller = CredentialsController(authStorage: authStorage, s3Service: s3Service, isWeb: false);
+      stubConnectThrows(Exception(
+          "ClientException with SocketException: Failed host lookup: 's3.example.com' "
+          '(OS Error: nodename nor servname provided, or not known, errno = 8), '
+          'uri=https://s3.example.com/bucket?location'));
+
+      final result = await controller.connect(accessKey: 'a', secretKey: 's', bucketPath: 'bucket');
+
+      expect(result.success, isFalse);
+      expect(result.errorMessage, isNot(contains('CORS')));
+      expect(result.errorMessage, startsWith("Could not reach the server: Failed host lookup: 's3.example.com'"));
+    });
+
+    test('natively, a refused connection says so', () async {
+      controller = CredentialsController(authStorage: authStorage, s3Service: s3Service, isWeb: false);
+      stubConnectThrows(Exception('ClientException: Connection refused'));
+
+      final result = await controller.connect(accessKey: 'a', secretKey: 's', bucketPath: 'bucket');
+
+      expect(result.errorMessage, 'Could not reach the server: Connection refused');
     });
 
     test('maps a "does not exist" exception to a bucket-not-found message', () async {
