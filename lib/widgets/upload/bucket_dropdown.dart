@@ -19,7 +19,7 @@ class BucketDropdown extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.all(16),
       child: DropdownButtonFormField<SavedConnection>(
-        value: selectedConnection,
+        initialValue: selectedConnection,
         isExpanded: true,
         decoration: const InputDecoration(
           labelText: 'Select Bucket',
