@@ -5,15 +5,30 @@ on:
     branches: [main]
   pull_request:
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+env:
+  # Pinned so a new Flutter release (and its new deprecations) can't break
+  # builds on its own. Keep in sync across ci.yml, release-ios.yml and
+  # deploy-web.yml; see CLAUDE.md.
+  FLUTTER_VERSION: 3.47.9
+
 jobs:
   analyze-and-test:
+    name: Analyze + Dart tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
       - uses: subosito/flutter-action@v2
         with:
-          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
 
       - run: flutter pub get
 
@@ -21,32 +36,52 @@ jobs:
 
       - run: flutter test
 
-  ios-build:
+  ios:
+    name: iOS build + native tests
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Check for iOS-relevant changes
-        id: changes
-        run: |
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            git fetch origin ${{ github.base_ref }} --depth=1
-            changed=$(git diff --name-only origin/${{ github.base_ref }}...HEAD)
-          else
-            changed=$(git diff --name-only HEAD~1 HEAD || echo "ios/")
-          fi
-          echo "$changed" | grep -qE '^ios/' && echo "ios_changed=true" >> "$GITHUB_OUTPUT" || echo "ios_changed=false" >> "$GITHUB_OUTPUT"
 
       - uses: subosito/flutter-action@v2
-        if: steps.changes.outputs.ios_changed == 'true'
         with:
-          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
 
       - run: flutter pub get
-        if: steps.changes.outputs.ios_changed == 'true'
 
-      - name: Compile-check the iOS target (no signing)
-        if: steps.changes.outputs.ios_changed == 'true'
-        run: flutter build ios --no-codesign --simulator
+      - name: Compile-check the iOS app (simulator, no signing)
+        run: flutter build ios --simulator --debug --no-codesign
+
+      - name: Pick an iPhone simulator
+        id: sim
+        run: |
+          udid=$(xcrun simctl list devices available --json \
+            | jq -r '[.devices | to_entries[] | select(.key | test("iOS")) | .value[] | select(.name | startswith("iPhone"))] | last | .udid')
+          if [ -z "$udid" ] || [ "$udid" = "null" ]; then
+            echo "No available iPhone simulator found" >&2
+            xcrun simctl list devices available
+            exit 1
+          fi
+          echo "udid=$udid" >> "$GITHUB_OUTPUT"
+
+      # RunnerTests is a host-app XCTest (it runs inside Runner.app on a
+      # simulator), covering native code the Dart tests can't reach.
+      - name: Native XCTest (RunnerTests)
+        working-directory: ios
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -workspace Runner.xcworkspace \
+            -scheme Runner \
+            -configuration Debug \
+            -destination "id=${{ steps.sim.outputs.udid }}" \
+            CODE_SIGNING_ALLOWED=NO \
+            | tee ../xcodebuild-test.log | grep -E '^(Test Suite|Test Case|.*error:|\*\* )' || true
+          grep -q '\*\* TEST SUCCEEDED \*\*' ../xcodebuild-test.log
+
+      - name: Upload xcodebuild log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xcodebuild-test-log
+          path: xcodebuild-test.log

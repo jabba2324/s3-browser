@@ -14,6 +14,12 @@ concurrency:
   group: pages
   cancel-in-progress: false
 
+env:
+  # Pinned so a new Flutter release (and its new deprecations) can't break
+  # builds on its own. Keep in sync across ci.yml, release-ios.yml and
+  # deploy-web.yml; see CLAUDE.md.
+  FLUTTER_VERSION: 3.47.9
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -22,7 +28,8 @@ jobs:
 
       - uses: subosito/flutter-action@v2
         with:
-          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
 
       - run: flutter pub get
 
