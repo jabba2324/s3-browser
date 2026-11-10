@@ -1,0 +1,132 @@
+name: Release iOS to TestFlight
+
+# Push a tag matching pubspec.yaml's version, e.g. for `version: 1.2.1+21`:
+#   git tag v1.2.1+21 && git push origin v1.2.1+21
+# or run it by hand from the Actions tab (uses pubspec.yaml as-is).
+#
+# Needs these repository secrets (Settings > Secrets and variables > Actions):
+#   APP_STORE_CONNECT_KEY_ID      App Store Connect API key ID
+#   APP_STORE_CONNECT_ISSUER_ID   Issuer ID shown above the keys list
+#   APP_STORE_CONNECT_KEY_P8      Full contents of the downloaded AuthKey_<id>.p8
+# The key needs the Admin role: signing is automatic (-allowProvisioningUpdates),
+# so Xcode creates/fetches certificates and profiles through the API.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+concurrency:
+  group: release-ios
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  # Pinned so a new Flutter release (and its new deprecations) can't break
+  # builds on its own. Keep in sync across ci.yml, release-ios.yml and
+  # deploy-web.yml; see CLAUDE.md.
+  FLUTTER_VERSION: 3.47.9
+
+jobs:
+  testflight:
+    runs-on: macos-latest
+    timeout-minutes: 60
+    environment: testflight
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the tag matches pubspec.yaml
+        if: github.ref_type == 'tag'
+        run: |
+          version=$(sed -nE 's/^version:[[:space:]]*([^[:space:]]+).*/\1/p' pubspec.yaml)
+          tag="${GITHUB_REF_NAME#v}"
+          echo "pubspec version: $version, tag: $tag"
+          if [ "$tag" != "$version" ]; then
+            echo "::error::Tag v$tag doesn't match pubspec.yaml version $version. Bump pubspec.yaml (including +N) and tag that."
+            exit 1
+          fi
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+
+      - run: flutter pub get
+
+      - run: flutter analyze
+
+      - run: flutter test
+
+      - name: Write the App Store Connect API key
+        env:
+          KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          KEY_P8: ${{ secrets.APP_STORE_CONNECT_KEY_P8 }}
+          ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+        run: |
+          if [ -z "$KEY_ID" ] || [ -z "$KEY_P8" ] || [ -z "$ISSUER_ID" ]; then
+            echo "::error::Missing APP_STORE_CONNECT_* secrets; see the comment at the top of this workflow."
+            exit 1
+          fi
+          key_path="$RUNNER_TEMP/AuthKey_$KEY_ID.p8"
+          printf '%s\n' "$KEY_P8" > "$key_path"
+          chmod 600 "$key_path"
+          echo "ASC_KEY_PATH=$key_path" >> "$GITHUB_ENV"
+
+      # Generates ios/Flutter/Generated.xcconfig (version/build number from
+      # pubspec.yaml) and pods/SPM config without building, so xcodebuild can
+      # do the signed archive itself.
+      - run: flutter build ios --release --config-only
+
+      - name: Archive
+        working-directory: ios
+        env:
+          KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+        run: |
+          set -o pipefail
+          xcodebuild archive \
+            -workspace Runner.xcworkspace \
+            -scheme Runner \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/Runner.xcarchive" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$ASC_KEY_PATH" \
+            -authenticationKeyID "$KEY_ID" \
+            -authenticationKeyIssuerID "$ISSUER_ID" \
+            | tee "$RUNNER_TEMP/archive.log" | grep -E '(error:|warning: .*sign|\*\* )' || true
+          grep -q '\*\* ARCHIVE SUCCEEDED \*\*' "$RUNNER_TEMP/archive.log"
+
+      - name: Export and upload to TestFlight
+        working-directory: ios
+        env:
+          KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+        run: |
+          set -o pipefail
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/Runner.xcarchive" \
+            -exportOptionsPlist ExportOptions.plist \
+            -exportPath "$RUNNER_TEMP/export" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$ASC_KEY_PATH" \
+            -authenticationKeyID "$KEY_ID" \
+            -authenticationKeyIssuerID "$ISSUER_ID" \
+            | tee "$RUNNER_TEMP/export.log" | grep -E '(error:|Upload|\*\* )' || true
+          grep -q '\*\* EXPORT SUCCEEDED \*\*' "$RUNNER_TEMP/export.log"
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-ios-logs
+          path: |
+            ${{ runner.temp }}/archive.log
+            ${{ runner.temp }}/export.log
+          if-no-files-found: ignore
+
+      - name: Remove the API key
+        if: always()
+        run: rm -f "$RUNNER_TEMP"/AuthKey_*.p8

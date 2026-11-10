@@ -20,11 +20,18 @@ flutter test test/widget_test.dart   # run a single test file
 open ios/Runner.xcworkspace    # open iOS project directly in Xcode
 ```
 
-There is no CI config in this repo — `flutter analyze` and `flutter test` are the manual gate before committing.
+`flutter analyze` and `flutter test` are the gate before committing; CI runs them too.
+
+### CI/CD (`.github/workflows/`)
+
+- `ci.yml` (every PR and push to `main`): Ubuntu runs `flutter analyze` + `flutter test`; macOS compiles the iOS app for the simulator and runs the native `RunnerTests` XCTest suite (`xcodebuild test`, scheme `Runner`).
+- `release-ios.yml` (tag `vX.Y.Z+N` matching `pubspec.yaml`'s `version`, or manual run): tests, then archives with automatic signing via an App Store Connect API key and uploads to TestFlight (`ios/ExportOptions.plist`). Needs repo secrets `APP_STORE_CONNECT_KEY_ID`, `APP_STORE_CONNECT_ISSUER_ID`, `APP_STORE_CONNECT_KEY_P8` (Admin-role key).
+- `deploy-web.yml` (push to `main`): builds the web app and publishes it to GitHub Pages.
+- The Flutter version is pinned by `FLUTTER_VERSION` in each workflow's top-level `env:` (keep all three in sync). Bump it deliberately (fixing any new `flutter analyze` deprecations in the same change); an unpinned `stable` previously broke CI with new deprecation infos.
 
 ### Versioning
 
-`pubspec.yaml`'s `version: X.Y.Z+N` controls both the app version and the native build number (`+N` is `CFBundleVersion`/iOS build number). Bump `+N` whenever a build is shipped to TestFlight/App Store, independent of whether `X.Y.Z` changes.
+`pubspec.yaml`'s `version: X.Y.Z+N` controls both the app version and the native build number (`+N` is `CFBundleVersion`/iOS build number). Bump `+N` whenever a build is shipped to TestFlight/App Store, independent of whether `X.Y.Z` changes. TestFlight rejects a reused build number, so bump before tagging a release.
 
 ## Architecture
 

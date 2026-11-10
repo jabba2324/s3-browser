@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Used by .github/workflows/release-ios.yml: export the archive for App
+     Store Connect and upload it straight to TestFlight, signing automatically
+     with the App Store Connect API key passed to xcodebuild. -->
+<plist version="1.0">
+<dict>
+	<key>method</key>
+	<string>app-store-connect</string>
+	<key>destination</key>
+	<string>upload</string>
+	<key>signingStyle</key>
+	<string>automatic</string>
+	<key>teamID</key>
+	<string>TZ6V6T4KYF</string>
+	<key>uploadSymbols</key>
+	<true/>
+	<!-- The build number comes from pubspec.yaml (+N); never let Xcode change it. -->
+	<key>manageAppVersionAndBuildNumber</key>
+	<false/>
+</dict>
+</plist>

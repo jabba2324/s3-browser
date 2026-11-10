@@ -290,7 +290,7 @@ class _CredentialsScreenState extends State<CredentialsScreen> {
   Widget _buildEndpointSection() {
     if (!_useCustomEndpoint) {
       return DropdownButtonFormField<String>(
-        value: _selectedRegion,
+        initialValue: _selectedRegion,
         isExpanded: true,
         decoration: const InputDecoration(
           labelText: 'AWS Region',
